@@ -200,8 +200,8 @@ function main() {
   }
 
   if (targets.length === 0) {
-    console.error("[x] No chunk contains fast_mode gate logic");
-    process.exit(1);
+    console.log("[ok] No chunk contains fast_mode gate logic (already ungated or upstream changed)");
+    return;
   }
 
   for (const bundle of targets) {
