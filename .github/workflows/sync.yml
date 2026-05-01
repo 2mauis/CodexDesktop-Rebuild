@@ -53,7 +53,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: [x64, arm64]
+        arch: [x64]
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -70,9 +70,18 @@ jobs:
           sudo apt-get install -y rpm fakeroot dpkg 7zip
 
       - name: Install dependencies
+        run: npm ci
+
+      - name: Install Codex CLI binary for Linux x64
         run: |
-          npm ci
-          npm install @cometix/codex@latest
+          tmpdir="$(mktemp -d)"
+          curl -L --retry 3 --retry-delay 2 \
+            -o "$tmpdir/codex.tgz" \
+            "https://github.com/openai/codex/releases/latest/download/codex-x86_64-unknown-linux-musl.tar.gz"
+          tar -xzf "$tmpdir/codex.tgz" -C "$tmpdir"
+          mkdir -p resources/bin/linux-x64
+          install -m 755 "$tmpdir/codex-x86_64-unknown-linux-musl" resources/bin/linux-x64/codex
+          resources/bin/linux-x64/codex --version
 
       - name: Sync upstream (macOS ZIP for unix, skip Windows)
         run: node scripts/sync-upstream.js --force --skip-win
@@ -98,7 +107,7 @@ jobs:
   # ──────────────────────────────────────────────
   release:
     needs: [build-linux]
-    if: always() && needs.check.result == 'success'
+    if: needs.build-linux.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
