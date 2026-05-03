@@ -4,24 +4,29 @@ const fs = require("fs");
 
 // 平台架构 -> @cometix/codex target triple 映射
 const TARGET_TRIPLE_MAP = {
-  "darwin-arm64": "aarch64-apple-darwin",
-  "darwin-x64": "x86_64-apple-darwin",
-  "linux-arm64": "aarch64-unknown-linux-musl",
-  "linux-x64": "x86_64-unknown-linux-musl",
-  "win32-x64": "x86_64-pc-windows-msvc",
+  "darwin-arm64": ["aarch64-apple-darwin"],
+  "darwin-x64": ["x86_64-apple-darwin"],
+  "linux-arm64": ["aarch64-unknown-linux-musl", "aarch64-unknown-linux-gnu"],
+  // Ubuntu 20.04+ 优先使用 GNU 目标，其次回退到 MUSL
+  "linux-x64": ["x86_64-unknown-linux-gnu", "x86_64-unknown-linux-musl"],
+  "win32-x64": ["x86_64-pc-windows-msvc"],
 };
 
 // 获取 @cometix/codex vendor 目录下的二进制路径
 function getVendorBinaryPath(platform, arch, subdir, binaryName) {
   const platformArch = `${platform}-${arch}`;
-  const targetTriple = TARGET_TRIPLE_MAP[platformArch];
-  if (!targetTriple) return null;
+  const targetTriples = TARGET_TRIPLE_MAP[platformArch];
+  if (!targetTriples || targetTriples.length === 0) return null;
 
-  const vendorPath = path.join(
-    __dirname, "node_modules", "@cometix", "codex", "vendor",
-    targetTriple, subdir, binaryName
-  );
-  return fs.existsSync(vendorPath) ? vendorPath : null;
+  for (const targetTriple of targetTriples) {
+    const vendorPath = path.join(
+      __dirname, "node_modules", "@cometix", "codex", "vendor",
+      targetTriple, subdir, binaryName
+    );
+    if (fs.existsSync(vendorPath)) return vendorPath;
+  }
+
+  return null;
 }
 
 // 从 npm vendor 复制二进制到 resources/bin/（确保本地始终为最新）
