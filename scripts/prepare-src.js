@@ -139,21 +139,20 @@ function main() {
     console.log(`   [!] @cometix/codex vendor not found for ${platform}, keeping upstream`);
   }
 
-  // 3. Copy to flat src/ for forge
-  // Clear forge-visible dirs
-  for (const d of [".vite", "webview", "skills", "node_modules", "native-menu-locales"]) {
-    const p = path.join(SRC, d);
-    if (fs.existsSync(p)) fs.rmSync(p, { recursive: true });
+  // 3. For Linux: copy _asar/ content to flat src/ (forge packs ASAR from src/)
+  if (isLinux) {
+    // Clear flat src/ dirs
+    for (const d of [".vite", "webview", "skills", "native-menu-locales", "node_modules"]) {
+      const p = path.join(SRC, d);
+      if (fs.existsSync(p)) fs.rmSync(p, { recursive: true });
+    }
+    for (const f of fs.readdirSync(SRC)) {
+      const p = path.join(SRC, f);
+      if (fs.statSync(p).isFile()) fs.unlinkSync(p);
+    }
+    const count = copyRecursive(asarContentDir, SRC);
+    console.log(`   [linux] _asar/ -> src/ (${count} files for forge ASAR packing)`);
   }
-  // Remove loose files in src/ (but keep platform dirs)
-  for (const f of fs.readdirSync(SRC)) {
-    const p = path.join(SRC, f);
-    if (fs.statSync(p).isFile()) fs.unlinkSync(p);
-  }
-
-  // Copy ASAR content to src/ (forge needs this for package.json main entry)
-  const asarCount = copyRecursive(asarContentDir, SRC);
-  console.log(`   [copy] _asar/ -> src/ (${asarCount} files for forge)`)
 
   // 4. Sync version to root package.json
   const upstreamPkg = path.join(asarContentDir, "package.json");
@@ -175,6 +174,11 @@ function main() {
     fs.writeFileSync(rootPkgPath, JSON.stringify(rootPkg, null, 2) + "\n");
     console.log(`   version: ${oldVer} -> ${rootPkg.version}`);
   }
+
+  // Write build mode marker for forge.config.js
+  const marker = path.join(SRC, ".build-mode");
+  fs.writeFileSync(marker, isLinux ? "linux" : "upstream-asar");
+  console.log(`   [mode] ${isLinux ? "linux (forge packs ASAR)" : "upstream-asar (pre-built)"}`);
 
   console.log(`   [ok] src/ ready for ${platform} build`);
 }

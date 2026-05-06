@@ -63,8 +63,7 @@
     "zod": "^4.1.13"
   },
   "optionalDependencies": {
-    "@cometix/codex": "^0.116.0-cometix",
-    "electron-liquid-glass": "1.1.1"
+    "@cometix/codex": "latest"
   },
   "codexBuildFlavor": "prod",
   "codexBuildNumber": "1272",
