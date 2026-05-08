@@ -28,7 +28,9 @@
     "check-update": "node scripts/check-update.js",
     "bump-version": "node scripts/bump-version.js",
     "postinstall": "npm run rebuild:native",
-    "rebuild:native": "electron-rebuild"
+    "rebuild:native": "electron-rebuild",
+    "build:ubuntu20.04-x64": "npm run prepare:unix && rm -rf out && electron-forge make --platform=linux --arch=x64",
+    "build:ubuntu20.04": "npm run prepare:unix && rm -rf out && electron-forge make --platform=linux --arch=x64"
   },
   "devDependencies": {
     "@electron-forge/cli": "^7.10.2",

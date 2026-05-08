@@ -1,0 +1,75 @@
+name: Build Ubuntu 20.04
+
+on:
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: "24"
+
+jobs:
+  build-ubuntu-20-04:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rpm fakeroot dpkg 7zip
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Codex CLI binary (GNU first, MUSL fallback)
+        run: |
+          tmpdir="$(mktemp -d)"
+
+          set +e
+          curl -L --retry 3 --retry-delay 2 \
+            -o "$tmpdir/codex.tgz" \
+            "https://github.com/openai/codex/releases/latest/download/codex-x86_64-unknown-linux-gnu.tar.gz"
+          gnu_status=$?
+          set -e
+
+          if [ $gnu_status -ne 0 ]; then
+            curl -L --retry 3 --retry-delay 2 \
+              -o "$tmpdir/codex.tgz" \
+              "https://github.com/openai/codex/releases/latest/download/codex-x86_64-unknown-linux-musl.tar.gz"
+          fi
+
+          tar -xzf "$tmpdir/codex.tgz" -C "$tmpdir"
+          mkdir -p resources/bin/linux-x64
+
+          if [ -f "$tmpdir/codex-x86_64-unknown-linux-gnu" ]; then
+            install -m 755 "$tmpdir/codex-x86_64-unknown-linux-gnu" resources/bin/linux-x64/codex
+          else
+            install -m 755 "$tmpdir/codex-x86_64-unknown-linux-musl" resources/bin/linux-x64/codex
+          fi
+
+          resources/bin/linux-x64/codex --version
+
+      - name: Sync upstream (macOS ZIP for unix, skip Windows)
+        run: node scripts/sync-upstream.js --force --skip-win
+
+      - name: Patch
+        run: node scripts/patch-all.js unix
+
+      - name: Build Ubuntu 20.04 x64
+        run: npm run build:ubuntu20.04
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Codex-Ubuntu-20.04-x64
+          path: |
+            out/make/deb/**/*.deb
+            out/make/rpm/**/*.rpm
+            out/make/zip/**/*.zip
+          if-no-files-found: error

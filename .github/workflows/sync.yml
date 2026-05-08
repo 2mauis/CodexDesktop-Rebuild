@@ -49,10 +49,11 @@ jobs:
   build-linux:
     needs: check
     if: needs.check.outputs.has_update == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-20.04, ubuntu-latest]
         arch: [x64]
     steps:
       - name: Checkout
@@ -75,12 +76,30 @@ jobs:
       - name: Install Codex CLI binary for Linux x64
         run: |
           tmpdir="$(mktemp -d)"
+
+          # Ubuntu 20.04 优先 GNU 目标；失败时回退 MUSL
+          set +e
           curl -L --retry 3 --retry-delay 2 \
             -o "$tmpdir/codex.tgz" \
-            "https://github.com/openai/codex/releases/latest/download/codex-x86_64-unknown-linux-musl.tar.gz"
+            "https://github.com/openai/codex/releases/latest/download/codex-x86_64-unknown-linux-gnu.tar.gz"
+          gnu_status=$?
+          set -e
+
+          if [ $gnu_status -ne 0 ]; then
+            curl -L --retry 3 --retry-delay 2 \
+              -o "$tmpdir/codex.tgz" \
+              "https://github.com/openai/codex/releases/latest/download/codex-x86_64-unknown-linux-musl.tar.gz"
+          fi
+
           tar -xzf "$tmpdir/codex.tgz" -C "$tmpdir"
           mkdir -p resources/bin/linux-x64
-          install -m 755 "$tmpdir/codex-x86_64-unknown-linux-musl" resources/bin/linux-x64/codex
+
+          if [ -f "$tmpdir/codex-x86_64-unknown-linux-gnu" ]; then
+            install -m 755 "$tmpdir/codex-x86_64-unknown-linux-gnu" resources/bin/linux-x64/codex
+          else
+            install -m 755 "$tmpdir/codex-x86_64-unknown-linux-musl" resources/bin/linux-x64/codex
+          fi
+
           resources/bin/linux-x64/codex --version
 
       - name: Sync upstream (macOS ZIP for unix, skip Windows)
@@ -95,7 +114,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Codex-Linux-${{ matrix.arch }}
+          name: Codex-Linux-${{ matrix.os }}-${{ matrix.arch }}
           path: |
             out/make/deb/**/*.deb
             out/make/rpm/**/*.rpm

@@ -25,6 +25,8 @@ npm run build:mac-arm64
 npm run build:win-x64
 npm run build:linux-x64
 npm run build:linux-arm64
+# Ubuntu 20.04 x64 build
+npm run build:ubuntu20.04
 
 # Build all platforms
 npm run build:all
