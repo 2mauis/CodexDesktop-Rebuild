@@ -1,4 +1,4 @@
-name: Sync Upstream & Patch
+name: CI
 
 on:
   workflow_dispatch:
