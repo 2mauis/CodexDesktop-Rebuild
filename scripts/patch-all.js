@@ -17,6 +17,7 @@ const PATCHES = [
   "patch-devtools.js",
   "patch-fast-mode.js",
   "patch-plugin-auth.js",
+  "patch-remote-config.js",
   "patch-updater.js",
   "patch-archive-delete.js",
 ];

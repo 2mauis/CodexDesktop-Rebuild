@@ -180,6 +180,8 @@ const FEATURE_CONTEXTS = new Set([
   "browser_use",
   "computer_use",
   "browser_use_external",
+  "remote_connections",
+  "remote_control",
 ]);
 
 function findStatsigGatePatches(ast, source) {
@@ -232,6 +234,9 @@ const FEATURE_KEYS = [
   "browserPane", "inAppBrowserUse", "inAppBrowserUseAllowed",
   "externalBrowserUse", "externalBrowserUseAllowed",
   "computerUse", "computerUseNodeRepl", "control", "multiWindow",
+  "remoteConnections", "remoteConnectionsAllowed",
+  "remoteControl", "remoteControlAllowed",
+  "remote_connections", "remote_control",
 ];
 
 function findFeatureDefaultPatches(ast, source) {
