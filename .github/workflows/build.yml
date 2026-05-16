@@ -27,27 +27,19 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
-      - run: npm ci
-      - name: Install Codex CLI binary for Linux x64
-        run: |
-          tmpdir="$(mktemp -d)"
-          curl -L --retry 3 --retry-delay 2 \
-            -o "$tmpdir/codex.tgz" \
-            "https://github.com/openai/codex/releases/latest/download/codex-x86_64-unknown-linux-musl.tar.gz"
-          tar -xzf "$tmpdir/codex.tgz" -C "$tmpdir"
-          mkdir -p resources/bin/linux-x64
-          install -m 755 "$tmpdir/codex-x86_64-unknown-linux-musl" resources/bin/linux-x64/codex
-          resources/bin/linux-x64/codex --version
+      - run: |
+          npm ci
       - run: |
           sudo apt-get update
           sudo apt-get install -y rpm fakeroot dpkg 7zip
       - run: node scripts/sync-upstream.js --force --skip-win
-      - run: node scripts/patch-all.js unix
+      - run: node scripts/patch-all.js mac-${{ matrix.arch }}
       - run: npm run build:linux-${{ matrix.arch }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: Codex-Linux-${{ matrix.arch }}
           path: |
             out/make/deb/**/*.deb
             out/make/rpm/**/*.rpm
             out/make/zip/**/*.zip
+          if-no-files-found: error
