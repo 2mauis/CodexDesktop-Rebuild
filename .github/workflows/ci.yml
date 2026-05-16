@@ -67,7 +67,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y rpm fakeroot dpkg 7zip
+          sudo apt-get install -y fakeroot dpkg
 
       - name: Install dependencies
         run: npm ci
@@ -85,10 +85,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: Codex-Linux-${{ matrix.arch }}
-          path: |
-            out/make/deb/**/*.deb
-            out/make/rpm/**/*.rpm
-            out/make/zip/**/*.zip
+          path: out/make/deb/**/*.deb
           if-no-files-found: error
 
   # ──────────────────────────────────────────────
@@ -169,11 +166,7 @@ jobs:
             | Windows x64 | `${{ steps.version.outputs.win_version || 'N/A' }}` |
             | Linux | uses macOS ASAR |
           files: |
-            artifacts/**/*.dmg
-            artifacts/**/*.zip
             artifacts/**/*.deb
-            artifacts/**/*.rpm
-            artifacts/**/*.exe
           draft: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
