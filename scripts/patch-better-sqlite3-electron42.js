@@ -3,15 +3,16 @@
  * Build-time patch: make better-sqlite3 compile against Electron 42 headers.
  *
  * Electron 42 enables newer V8 external pointer APIs. Current better-sqlite3
- * releases still call v8::External::Value() without a tag and pass `0` as the
- * SetNativeDataProperty setter, which becomes ambiguous with the Electron 42
- * headers used by electron-rebuild.
+ * releases still call v8::External::{New,Value}() without a tag and pass `0`
+ * as the SetNativeDataProperty setter, which becomes ambiguous with the
+ * Electron 42 headers used by electron-rebuild.
  */
 const fs = require("fs");
 const path = require("path");
 
 const PROJECT_ROOT = path.join(__dirname, "..");
 const MODULE_ROOT = path.join(PROJECT_ROOT, "node_modules", "better-sqlite3");
+const ADDON_FILE = path.join(MODULE_ROOT, "src", "better_sqlite3.cpp");
 const MACROS_FILE = path.join(MODULE_ROOT, "src", "util", "macros.cpp");
 const HELPERS_FILE = path.join(MODULE_ROOT, "src", "util", "helpers.cpp");
 
@@ -69,6 +70,20 @@ function patchMacros(source) {
   return source.replace(oldLine, newBlock);
 }
 
+function patchAddon(source) {
+  const oldLine = "v8::Local<v8::External> data = v8::External::New(isolate, addon);";
+  const newLine =
+    "v8::Local<v8::External> data = v8::External::New(isolate, addon, v8::kExternalPointerTypeTagDefault);";
+
+  if (source.includes(newLine)) return source;
+
+  if (!source.includes(oldLine)) {
+    throw new Error("Unable to find better-sqlite3 External::New call to patch");
+  }
+
+  return source.replace(oldLine, newLine);
+}
+
 function patchHelpers(source) {
   const patched = source.replace(
     /(\bSetNativeDataProperty\(\s*[\s\S]*?\n\s*func,\n\s*)0(\s*,\n\s*data\s*\))/,
@@ -100,6 +115,13 @@ function runSelfTest() {
     throw new Error("macro self-test did not add external pointer tag");
   }
 
+  const addon = patchAddon(
+    "v8::Local<v8::External> data = v8::External::New(isolate, addon);",
+  );
+  if (!addon.includes("kExternalPointerTypeTagDefault")) {
+    throw new Error("addon self-test did not add external pointer tag");
+  }
+
   const helpers = patchHelpers(
     [
       "recv->InstanceTemplate()->SetNativeDataProperty(",
@@ -123,6 +145,7 @@ function main() {
     return;
   }
 
+  patchText(ADDON_FILE, patchAddon);
   patchText(MACROS_FILE, patchMacros);
   patchText(HELPERS_FILE, patchHelpers);
 }
