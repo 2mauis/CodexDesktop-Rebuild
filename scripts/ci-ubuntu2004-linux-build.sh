@@ -37,6 +37,7 @@ apt-get install -y --no-install-recommends \
   git \
   make \
   python3 \
+  unzip \
   xz-utils
 rm -rf /var/lib/apt/lists/*
 
