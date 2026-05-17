@@ -31,12 +31,17 @@ apt-get install -y --no-install-recommends \
   dpkg \
   fakeroot \
   file \
+  gcc-10 \
   g++ \
+  g++-10 \
   git \
   make \
   python3 \
   xz-utils
 rm -rf /var/lib/apt/lists/*
+
+export CC=gcc-10
+export CXX=g++-10
 
 node_major="${NODE_VERSION:-24}"
 node_base_url="https://nodejs.org/dist/latest-v${node_major}.x"
