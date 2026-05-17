@@ -36,6 +36,7 @@ apt-get install -y --no-install-recommends \
   g++-10 \
   git \
   make \
+  p7zip-full \
   python3 \
   unzip \
   xz-utils
