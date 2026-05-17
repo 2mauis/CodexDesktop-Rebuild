@@ -44,6 +44,25 @@ rm -rf /var/lib/apt/lists/*
 
 export CC=gcc-10
 export CXX=g++-10
+compat_include=/tmp/codex-ci-include
+mkdir -p "$compat_include"
+cat > "$compat_include/source_location" <<'EOF'
+#pragma once
+#include <cstdint>
+
+namespace std {
+class source_location {
+ public:
+  static constexpr source_location current() noexcept { return source_location(); }
+  constexpr source_location() noexcept = default;
+  constexpr const char* file_name() const noexcept { return ""; }
+  constexpr const char* function_name() const noexcept { return ""; }
+  constexpr std::uint_least32_t line() const noexcept { return 0; }
+  constexpr std::uint_least32_t column() const noexcept { return 0; }
+};
+}
+EOF
+export CXXFLAGS="-I${compat_include} ${CXXFLAGS:-}"
 
 node_major="${NODE_VERSION:-24}"
 node_base_url="https://nodejs.org/dist/latest-v${node_major}.x"
