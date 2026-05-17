@@ -1,0 +1,74 @@
+name: CI Ubuntu 20.04
+
+on:
+  workflow_dispatch:
+    inputs:
+      arch:
+        description: "Linux architecture to build"
+        type: choice
+        default: x64
+        options: [x64, arm64, all]
+
+env:
+  NODE_VERSION: "24"
+  UBUNTU_2004_IMAGE: "ubuntu:20.04"
+
+jobs:
+  matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      build_matrix: ${{ steps.matrix.outputs.build_matrix }}
+    steps:
+      - name: Select Linux build matrix
+        id: matrix
+        run: |
+          x64='{"arch":"x64","runner":"ubuntu-latest","docker-platform":"linux/amd64"}'
+          arm64='{"arch":"arm64","runner":"ubuntu-24.04-arm","docker-platform":"linux/arm64"}'
+
+          case "${{ inputs.arch }}" in
+            x64)
+              matrix="{\"include\":[${x64}]}"
+              ;;
+            arm64)
+              matrix="{\"include\":[${arm64}]}"
+              ;;
+            all)
+              matrix="{\"include\":[${x64},${arm64}]}"
+              ;;
+            *)
+              echo "Unsupported arch: ${{ inputs.arch }}" >&2
+              exit 1
+              ;;
+          esac
+
+          echo "build_matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+  build-linux:
+    needs: matrix
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.matrix.outputs.build_matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Build deb in Ubuntu 20.04 container
+        run: |
+          docker run --rm \
+            --platform "${{ matrix.docker-platform }}" \
+            -v "$PWD:/work" \
+            -w /work \
+            -e NODE_VERSION="${{ env.NODE_VERSION }}" \
+            -e HOST_UID="$(id -u)" \
+            -e HOST_GID="$(id -g)" \
+            "${{ env.UBUNTU_2004_IMAGE }}" \
+            bash scripts/ci-ubuntu2004-linux-build.sh "${{ matrix.arch }}"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: Codex-Linux-Ubuntu-20.04-${{ matrix.arch }}
+          path: out/make/deb/**/*.deb
+          if-no-files-found: error
+          retention-days: 1

@@ -15,7 +15,6 @@ on:
 
 env:
   NODE_VERSION: "24"
-  UBUNTU_2004_IMAGE: "ubuntu:20.04"
 
 jobs:
   check:
@@ -56,15 +55,18 @@ jobs:
       - name: Select Linux build matrix
         id: matrix
         run: |
+          x64='{"arch":"x64","runner":"ubuntu-latest"}'
+          arm64='{"arch":"arm64","runner":"ubuntu-24.04-arm"}'
+
           case "${{ inputs.arch }}" in
             x64)
-              matrix='{"include":[{"arch":"x64","runner":"ubuntu-latest","docker-platform":"linux/amd64"}]}'
+              matrix="{\"include\":[${x64}]}"
               ;;
             arm64)
-              matrix='{"include":[{"arch":"arm64","runner":"ubuntu-24.04-arm","docker-platform":"linux/arm64"}]}'
+              matrix="{\"include\":[${arm64}]}"
               ;;
             all)
-              matrix='{"include":[{"arch":"x64","runner":"ubuntu-latest","docker-platform":"linux/amd64"},{"arch":"arm64","runner":"ubuntu-24.04-arm","docker-platform":"linux/arm64"}]}'
+              matrix="{\"include\":[${x64},${arm64}]}"
               ;;
             *)
               echo "Unsupported arch: ${{ inputs.arch }}" >&2
@@ -85,17 +87,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Build deb in Ubuntu 20.04 container
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install system dependencies
         run: |
-          docker run --rm \
-            --platform "${{ matrix.docker-platform }}" \
-            -v "$PWD:/work" \
-            -w /work \
-            -e NODE_VERSION="${{ env.NODE_VERSION }}" \
-            -e HOST_UID="$(id -u)" \
-            -e HOST_GID="$(id -g)" \
-            "${{ env.UBUNTU_2004_IMAGE }}" \
-            bash scripts/ci-ubuntu2004-linux-build.sh "${{ matrix.arch }}"
+          sudo apt-get update
+          sudo apt-get install -y fakeroot dpkg
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Sync upstream (macOS ZIP for unix, skip Windows)
+        run: node scripts/sync-upstream.js --force --skip-win
+
+      - name: Patch
+        run: node scripts/patch-all.js mac-${{ matrix.arch }}
+
+      - name: Build deb on GitHub runner
+        run: npm run build:linux-${{ matrix.arch }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
