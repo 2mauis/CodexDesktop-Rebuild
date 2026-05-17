@@ -110,11 +110,32 @@ jobs:
       - name: Build deb on GitHub runner
         run: npm run build:linux-${{ matrix.arch }}
 
+      - name: Stage deb artifact
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          case "${{ matrix.arch }}" in
+            x64) deb_arch="amd64" ;;
+            arm64) deb_arch="arm64" ;;
+            *)
+              echo "Unsupported arch: ${{ matrix.arch }}" >&2
+              exit 1
+              ;;
+          esac
+
+          mkdir -p release-assets
+          deb_path="$(find out/make/deb -type f -name '*.deb' | head -n 1)"
+          if [ -z "$deb_path" ]; then
+            echo "No deb package found" >&2
+            exit 1
+          fi
+
+          cp "$deb_path" "release-assets/codex_${version}_ubuntu24.04_${deb_arch}.deb"
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
         with:
           name: Codex-Linux-${{ matrix.arch }}
-          path: out/make/deb/**/*.deb
+          path: release-assets/*.deb
           if-no-files-found: error
           retention-days: 1
 
@@ -191,8 +212,8 @@ jobs:
 
           | Package | Build target |
           |---------|--------------|
-          | `codex_*_amd64.deb` | Linux x64 |
-          | `codex_*_arm64.deb` | Linux arm64 |
+          | `codex_*_ubuntu24.04_amd64.deb` | Ubuntu 24.04 x64 |
+          | `codex_*_ubuntu24.04_arm64.deb` | Ubuntu 24.04 arm64 |
 
           ## Upstream Versions
 
@@ -228,7 +249,7 @@ jobs:
 
           release_id="$(gh release view "${TAG_NAME}" --repo "${GITHUB_REPOSITORY}" --json databaseId --jq '.databaseId')"
           gh api "repos/${GITHUB_REPOSITORY}/releases/${release_id}/assets" \
-            --jq '.[] | select(.name | endswith(".deb") | not) | [.id,.name] | @tsv' |
+            --jq '.[] | select((.name | endswith(".deb") | not) or (.name | test("_ubuntu[0-9]+[.][0-9]+_(amd64|arm64)[.]deb$") | not)) | [.id,.name] | @tsv' |
           while IFS=$'\t' read -r asset_id asset_name; do
             [ -n "$asset_id" ] || continue
             echo "Deleting non-deb release asset: $asset_name"
