@@ -40,3 +40,4 @@ jobs:
           name: Codex-Linux-${{ matrix.arch }}
           path: out/make/deb/**/*.deb
           if-no-files-found: error
+          retention-days: 1
