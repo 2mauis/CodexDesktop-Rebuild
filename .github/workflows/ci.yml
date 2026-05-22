@@ -104,9 +104,6 @@ jobs:
       - name: Sync upstream (macOS ZIP for unix, skip Windows)
         run: node scripts/sync-upstream.js --force --skip-win
 
-      - name: Patch
-        run: node scripts/patch-all.js mac-${{ matrix.arch }}
-
       - name: Build deb on GitHub runner
         run: npm run build:linux-${{ matrix.arch }}
 
