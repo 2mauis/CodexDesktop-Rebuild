@@ -4,7 +4,8 @@
  *
  * Usage:
  *   node scripts/patch-all.js              # Patch both platforms
- *   node scripts/patch-all.js unix         # Patch unix only
+ *   node scripts/patch-all.js linux        # Patch Linux flat src only
+ *   node scripts/patch-all.js unix         # Patch macOS unix sources only
  *   node scripts/patch-all.js win          # Patch win only
  *   node scripts/patch-all.js --check      # Dry-run all
  */
@@ -25,7 +26,9 @@ const PATCHES = [
 
 function main() {
   const args = process.argv.slice(2);
-  const platform = args.find((a) => ["mac-arm64", "mac-x64", "win", "unix"].includes(a));
+  const platform = args.find((a) =>
+    ["linux", "mac-arm64", "mac-x64", "win", "unix"].includes(a),
+  );
   const extra = args.filter((a) => a.startsWith("--"));
   const passArgs = [...(platform ? [platform] : []), ...extra];
 

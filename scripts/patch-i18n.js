@@ -115,6 +115,11 @@ function collectPatches(ast, source) {
 // ──────────────────────────────────────────────
 
 function locateTargets(platform) {
+  const isLinux = platform === "linux" || platform?.startsWith("linux-");
+  const assetsPath = (plat) =>
+    isLinux
+      ? path.join(SRC_DIR, "webview", "assets")
+      : path.join(SRC_DIR, plat, "_asar", "webview", "assets");
   const platforms = platform
     ? [platform]
     : ["mac-arm64", "mac-x64", "win"].filter((p) =>
@@ -133,7 +138,7 @@ function locateTargets(platform) {
     }
 
     // Check other chunks (general-settings-*.js, app-main-*.js, etc.)
-    const assetsDir = path.join(SRC_DIR, plat, "_asar", "webview", "assets");
+    const assetsDir = assetsPath(plat);
     if (!fs.existsSync(assetsDir)) continue;
     for (const f of fs.readdirSync(assetsDir)) {
       if (!f.endsWith(".js") || f.startsWith("index-")) continue;
@@ -155,7 +160,9 @@ function locateTargets(platform) {
 function main() {
   const args = process.argv.slice(2);
   const isCheck = args.includes("--check");
-  const platform = args.find((a) => ["mac-arm64", "mac-x64", "win"].includes(a));
+  const platform = args.find((a) =>
+    ["linux", "mac-arm64", "mac-x64", "win"].includes(a),
+  );
 
   const targets = locateTargets(platform);
 

@@ -34,6 +34,16 @@ function locateBundles({ dir, pattern, platform }) {
   const getDir = dirMap[dir];
   if (!getDir) throw new Error(`Unknown dir type: ${dir}`);
 
+  if (platform === "linux" || platform?.startsWith("linux-")) {
+    const fallback = legacyMap[dir];
+    if (!fallback || !fs.existsSync(fallback)) return [];
+    const files = fs.readdirSync(fallback).filter((f) => pattern.test(f));
+    if (files.length === 0) return [];
+    const target =
+      files.length > 1 ? files.find((f) => f !== "main.js") || files[0] : files[0];
+    return [{ platform: "linux", path: path.join(fallback, target) }];
+  }
+
   const ALL_PLATFORMS = ["mac-arm64", "mac-x64", "win"];
   const platforms = platform
     ? [platform]

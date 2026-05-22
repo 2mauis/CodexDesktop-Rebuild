@@ -81,5 +81,4 @@ dpkg --print-architecture
 
 npm ci
 node scripts/sync-upstream.js --force --skip-win
-node scripts/patch-all.js "mac-${arch}"
 npm run "build:linux-${arch}"

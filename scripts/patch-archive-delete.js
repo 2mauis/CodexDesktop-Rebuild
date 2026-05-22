@@ -271,7 +271,7 @@ function patchDataControls(bundles) {
 function main() {
   const args = process.argv.slice(2);
   const platform = args.find((a) =>
-    ["mac-arm64", "mac-x64", "win"].includes(a),
+    ["linux", "mac-arm64", "mac-x64", "win"].includes(a),
   );
 
   console.log("  [layer 1] app-main: delete-conversation route");

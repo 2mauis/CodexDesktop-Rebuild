@@ -91,6 +91,7 @@ function disableRemoteControlCleanup(source) {
 }
 
 function locateTargets(platform) {
+  const isLinux = platform === "linux" || platform?.startsWith("linux-");
   const platforms = platform
     ? [platform]
     : ["mac-arm64", "mac-x64", "win"].filter((p) =>
@@ -99,7 +100,9 @@ function locateTargets(platform) {
 
   const targets = [];
   for (const plat of platforms) {
-    const buildDir = path.join(SRC_DIR, plat, "_asar", ".vite", "build");
+    const buildDir = isLinux
+      ? path.join(SRC_DIR, ".vite", "build")
+      : path.join(SRC_DIR, plat, "_asar", ".vite", "build");
     if (!fs.existsSync(buildDir)) continue;
     for (const file of fs.readdirSync(buildDir)) {
       if (file.startsWith("main-") && file.endsWith(".js")) {
@@ -170,7 +173,9 @@ function main() {
   }
 
   const isCheck = args.includes("--check");
-  const platform = args.find((a) => ["mac-arm64", "mac-x64", "win"].includes(a));
+  const platform = args.find((a) =>
+    ["linux", "mac-arm64", "mac-x64", "win"].includes(a),
+  );
   const targets = locateTargets(platform);
 
   if (targets.length === 0) {

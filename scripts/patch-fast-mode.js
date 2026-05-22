@@ -77,8 +77,9 @@ function main() {
   const args = process.argv.slice(2);
   const isCheck = args.includes("--check");
   const platform = args.find((a) =>
-    ["mac-arm64", "mac-x64", "win"].includes(a),
+    ["linux", "mac-arm64", "mac-x64", "win"].includes(a),
   );
+  const isLinux = platform === "linux" || platform?.startsWith("linux-");
 
   const platforms = platform
     ? [platform]
@@ -88,7 +89,9 @@ function main() {
 
   const targets = [];
   for (const plat of platforms) {
-    const assetsDir = path.join(SRC_DIR, plat, "_asar", "webview", "assets");
+    const assetsDir = isLinux
+      ? path.join(SRC_DIR, "webview", "assets")
+      : path.join(SRC_DIR, plat, "_asar", "webview", "assets");
     if (!fs.existsSync(assetsDir)) continue;
     for (const f of fs.readdirSync(assetsDir)) {
       if (!f.endsWith(".js")) continue;
