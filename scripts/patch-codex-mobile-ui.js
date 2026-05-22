@@ -74,6 +74,24 @@ function isFunctionNode(node) {
   );
 }
 
+function identifiersFromPattern(pattern) {
+  if (!pattern || typeof pattern !== "object") return [];
+  if (pattern.type === "Identifier") return [pattern.name];
+  if (pattern.type === "RestElement") return identifiersFromPattern(pattern.argument);
+  if (pattern.type === "AssignmentPattern") return identifiersFromPattern(pattern.left);
+  if (pattern.type === "ArrayPattern") {
+    return pattern.elements.flatMap((element) => identifiersFromPattern(element));
+  }
+  if (pattern.type === "ObjectPattern") {
+    return pattern.properties.flatMap((property) => {
+      if (!property) return [];
+      if (property.type === "RestElement") return identifiersFromPattern(property.argument);
+      return identifiersFromPattern(property.value);
+    });
+  }
+  return [];
+}
+
 function sourceFor(source, node) {
   return source.slice(node.start, node.end);
 }
@@ -100,7 +118,8 @@ function hasCodexMobileContext(source) {
     source.includes("codex-mobile") ||
     source.includes("codex_mobile") ||
     source.includes("CodexMobile") ||
-    source.includes("Codex mobile")
+    source.includes("Codex mobile") ||
+    source.includes("CODEX_MOBILE_SETUP_COMPLETED")
   );
 }
 
@@ -111,24 +130,43 @@ function findAnnouncementGatePatch(source) {
   walk(ast, (fn) => {
     if (!isFunctionNode(fn)) return;
     const fnSource = sourceFor(source, fn);
-    if (!fnSource.includes("remote_control")) return;
+    const isCodexMobileAnnouncement = hasCodexMobileContext(fnSource);
+    if (!fnSource.includes("remote_control") && !isCodexMobileAnnouncement) {
+      return;
+    }
 
     const remoteVars = new Set();
     const statsigVars = new Set();
+    const protectedNegatedVars = new Set();
 
     walk(fn, (node) => {
       if (node.type !== "VariableDeclarator") return;
-      if (node.id?.type !== "Identifier" || !node.init) return;
+      if (!node.init) return;
+      const initSource = sourceFor(source, node.init);
 
-      if (isRemoteControlInit(source, node.init)) {
+      if (node.id?.type === "Identifier" && isRemoteControlInit(source, node.init)) {
         remoteVars.add(node.id.name);
       }
-      if (isStatsigGateCall(node.init)) {
+      if (node.id?.type === "Identifier" && isStatsigGateCall(node.init)) {
         statsigVars.add(node.id.name);
+      }
+      if (initSource.includes("CODEX_MOBILE_SETUP_COMPLETED")) {
+        for (const name of identifiersFromPattern(node.id)) {
+          protectedNegatedVars.add(name);
+        }
+      }
+      if (
+        isCodexMobileAnnouncement &&
+        node.id?.type === "ArrayPattern" &&
+        node.init?.type === "CallExpression"
+      ) {
+        for (const name of identifiersFromPattern(node.id.elements[0])) {
+          protectedNegatedVars.add(name);
+        }
       }
     });
 
-    if (remoteVars.size === 0) return;
+    if (remoteVars.size === 0 && !isCodexMobileAnnouncement) return;
 
     walk(fn, (node) => {
       if (node.type !== "VariableDeclarator" || !node.init) return;
@@ -140,10 +178,24 @@ function findAnnouncementGatePatch(source) {
       const kept = [];
       let removedRemote = false;
       let removedStatsig = false;
+      let removedAnnouncementRemote = false;
 
       for (const term of terms) {
         if (isRemoteControlNegation(source, term, remoteVars)) {
           removedRemote = true;
+          continue;
+        }
+        if (
+          isCodexMobileAnnouncement &&
+          remoteVars.size === 0 &&
+          !removedAnnouncementRemote &&
+          term.type === "UnaryExpression" &&
+          term.operator === "!" &&
+          term.argument?.type === "Identifier" &&
+          !protectedNegatedVars.has(term.argument.name)
+        ) {
+          removedRemote = true;
+          removedAnnouncementRemote = true;
           continue;
         }
         if (isStatsigGateTerm(term, statsigVars)) {
@@ -306,6 +358,18 @@ function runSelfTest() {
   if (!noStatsig.changed) throw new Error("no-statsig self-test did not patch");
   if (!noStatsig.source.includes(`u=t&&i&&!r&&!n&&!s/* ${ANNOUNCEMENT_MARKER} */`)) {
     throw new Error("no-statsig announcement gate was not relaxed");
+  }
+
+  const completedSetupSample = [
+    "function Yy({enabled:e,hasCompletedCodexMobileSetup:t,remoteControlFeaturesVisible:n,remoteControlOnboardingEnabled:r}){return e&&n&&r&&!t}",
+    "function T_(){let e=(0,Z.c)(14),t=Gg(),{data:n,isLoading:r}=qi(z.CODEX_MOBILE_SETUP_COMPLETED),i=wc(),a=Li(`2798711298`),o=K(tt,Tt),[s,c]=pn(Qg),l=t&&i&&a&&!o&&!r&&!n&&!s,u;}",
+  ].join("");
+  const completedSetup = patchSource(completedSetupSample);
+  if (!completedSetup.changed) {
+    throw new Error("completed-setup self-test did not patch");
+  }
+  if (!completedSetup.source.includes(`l=t&&i&&!r&&!n&&!s/* ${ANNOUNCEMENT_MARKER} */`)) {
+    throw new Error("completed-setup announcement gate was not relaxed");
   }
 
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "codex-mobile-ui-"));
