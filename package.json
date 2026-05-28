@@ -8,6 +8,7 @@
     "start": "node scripts/start-dev.js",
     "dev": "node scripts/start-dev.js",
     "patch": "node scripts/patch-all.js",
+    "patch:installed-shells": "bash scripts/patch-installed-codex-shells.sh",
     "patch:mac": "node scripts/patch-all.js mac-arm64 && node scripts/patch-all.js mac-x64",
     "patch:win": "node scripts/patch-all.js win",
     "forge:package": "electron-forge package",

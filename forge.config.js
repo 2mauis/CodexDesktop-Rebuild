@@ -70,7 +70,21 @@ module.exports = {
     { name: "@electron-forge/maker-zip", platforms: ["win32"] },
     {
       name: "@electron-forge/maker-deb",
-      config: { options: { name: "codex", productName: "Codex", genericName: "AI Coding Assistant", categories: ["Development", "Utility"], bin: "Codex", maintainer: "Cometix Space", homepage: "https://github.com/Haleclipse/CodexDesktop-Rebuild", icon: "./resources/electron.png" } },
+      config: {
+        options: {
+          name: "codex",
+          productName: "Codex",
+          genericName: "AI Coding Assistant",
+          categories: ["Development", "Utility"],
+          bin: "Codex",
+          maintainer: "Cometix Space",
+          homepage: "https://github.com/Haleclipse/CodexDesktop-Rebuild",
+          icon: "./resources/electron.png",
+          scripts: {
+            postinst: path.join(__dirname, "scripts", "patch-installed-codex-shells.sh"),
+          },
+        },
+      },
     },
   ],
   plugins: [
