@@ -108,25 +108,7 @@ jobs:
         run: npm run build:linux-${{ matrix.arch }}
 
       - name: Stage deb artifact
-        run: |
-          version="$(node -p "require('./package.json').version")"
-          case "${{ matrix.arch }}" in
-            x64) deb_arch="amd64" ;;
-            arm64) deb_arch="arm64" ;;
-            *)
-              echo "Unsupported arch: ${{ matrix.arch }}" >&2
-              exit 1
-              ;;
-          esac
-
-          mkdir -p release-assets
-          deb_path="$(find out/make/deb -type f -name '*.deb' | head -n 1)"
-          if [ -z "$deb_path" ]; then
-            echo "No deb package found" >&2
-            exit 1
-          fi
-
-          cp "$deb_path" "release-assets/codex_${version}_ubuntu24.04_${deb_arch}.deb"
+        run: node scripts/stage-linux-deb.js --arch "${{ matrix.arch }}" --ubuntu 24.04
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
