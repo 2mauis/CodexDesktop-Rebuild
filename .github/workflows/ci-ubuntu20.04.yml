@@ -10,7 +10,7 @@ on:
         options: [x64, arm64, all]
 
 env:
-  NODE_VERSION: "24"
+  NODE_VERSION: "24.11.0"
   UBUNTU_2004_IMAGE: "ubuntu:20.04"
 
 jobs:

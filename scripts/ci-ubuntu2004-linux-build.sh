@@ -64,11 +64,16 @@ class source_location {
 EOF
 export CXXFLAGS="-I${compat_include} ${CXXFLAGS:-}"
 
-node_major="${NODE_VERSION:-24}"
-node_base_url="https://nodejs.org/dist/latest-v${node_major}.x"
+node_version="${NODE_VERSION:-24.11.0}"
+node_version="${node_version#v}"
+if [[ "$node_version" =~ ^[0-9]+$ ]]; then
+  node_base_url="https://nodejs.org/dist/latest-v${node_version}.x"
+else
+  node_base_url="https://nodejs.org/dist/v${node_version}"
+fi
 node_file="$(curl -fsSL "$node_base_url/SHASUMS256.txt" | awk "/linux-${node_arch}\\.tar\\.xz/ {print \$2; exit}")"
 if [ -z "$node_file" ]; then
-  echo "Unable to resolve Node.js ${node_major} linux-${node_arch} tarball" >&2
+  echo "Unable to resolve Node.js ${node_version} linux-${node_arch} tarball" >&2
   exit 1
 fi
 
