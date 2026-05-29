@@ -14,7 +14,7 @@ on:
         options: [x64, arm64, all]
 
 env:
-  NODE_VERSION: "24"
+  NODE_VERSION: "24.11.0"
 
 jobs:
   check:
@@ -123,7 +123,7 @@ jobs:
   # ──────────────────────────────────────────────
   release:
     needs: [build-linux]
-    if: needs.build-linux.result == 'success'
+    if: needs.build-linux.result == 'success' && github.ref_name == 'master'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -150,12 +150,19 @@ jobs:
           WIN_VER=$(echo "$RESULT" | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const j=JSON.parse(d);console.log(j.platforms?.Windows?.version||'')}catch{console.log('')}})")
 
           VERSION="${MAC_ARM64:-${MAC_X64:-$WIN_VER}}"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "mac_arm64=$MAC_ARM64" >> "$GITHUB_OUTPUT"
           echo "mac_x64=$MAC_X64" >> "$GITHUB_OUTPUT"
           echo "win_version=$WIN_VER" >> "$GITHUB_OUTPUT"
 
-          if [ -z "$VERSION" ]; then echo "No version detected"; exit 0; fi
+          if [ -z "$VERSION" ]; then
+            echo "No version detected"
+            echo "version=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          TAG_NAME="v${VERSION}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
 
           node -e "
             const fs=require('fs'), p=JSON.parse(fs.readFileSync('package.json','utf8'));
@@ -167,11 +174,15 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
           git add package.json
-          git diff --cached --quiet && echo "No version change" && exit 0
+          if git diff --cached --quiet; then
+            echo "No version change"
+          else
+            git commit -m "Bump version to ${VERSION}"
+          fi
 
-          git commit -m "Bump version to ${VERSION}"
-          git tag -a "v${VERSION}" -m "Codex ${VERSION}"
-          git push origin HEAD --tags
+          git tag -fa "${TAG_NAME}" -m "Codex ${VERSION}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+          git push --force origin "refs/tags/${TAG_NAME}"
 
       - name: Download all artifacts
         uses: actions/download-artifact@v7
@@ -203,34 +214,44 @@ jobs:
           | Windows x64 | `${{ steps.version.outputs.win_version || 'N/A' }}` |
           EOF
 
-      - name: Create Release
-        if: steps.version.outputs.version != ''
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: v${{ steps.version.outputs.version }}
-          name: Codex ${{ steps.version.outputs.version }}
-          body_path: release-notes.md
-          files: |
-            artifacts/**/*.deb
-          draft: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Normalize Release
+      - name: Publish Release
         if: steps.version.outputs.version != ''
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG_NAME: v${{ steps.version.outputs.version }}
+          TAG_NAME: ${{ steps.version.outputs.tag_name }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          gh release edit "${TAG_NAME}" \
-            --repo "${GITHUB_REPOSITORY}" \
-            --notes-file release-notes.md
+          set -euo pipefail
+          shopt -s globstar nullglob
+
+          debs=(artifacts/**/*.deb)
+          if [ "${#debs[@]}" -eq 0 ]; then
+            echo "No deb artifacts found under artifacts/" >&2
+            exit 1
+          fi
+
+          if gh release view "${TAG_NAME}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            gh release edit "${TAG_NAME}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --title "Codex ${VERSION}" \
+              --notes-file release-notes.md
+          else
+            gh release create "${TAG_NAME}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --title "Codex ${VERSION}" \
+              --notes-file release-notes.md \
+              --draft
+          fi
 
           release_id="$(gh release view "${TAG_NAME}" --repo "${GITHUB_REPOSITORY}" --json databaseId --jq '.databaseId')"
           gh api "repos/${GITHUB_REPOSITORY}/releases/${release_id}/assets" \
-            --jq '.[] | select((.name | endswith(".deb") | not) or (.name | test("_ubuntu[0-9]+[.][0-9]+_(amd64|arm64)[.]deb$") | not)) | [.id,.name] | @tsv' |
+            --jq '.[] | [.id,.name] | @tsv' |
           while IFS=$'\t' read -r asset_id asset_name; do
             [ -n "$asset_id" ] || continue
-            echo "Deleting non-deb release asset: $asset_name"
+            echo "Deleting existing release asset: $asset_name"
             gh api -X DELETE "repos/${GITHUB_REPOSITORY}/releases/assets/${asset_id}"
           done
+
+          gh release upload "${TAG_NAME}" "${debs[@]}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --clobber

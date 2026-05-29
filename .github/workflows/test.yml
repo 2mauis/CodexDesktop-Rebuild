@@ -11,7 +11,7 @@ on:
         options: [linux]
 
 env:
-  NODE_VERSION: "24"
+  NODE_VERSION: "24.11.0"
 
 jobs:
   test-linux:

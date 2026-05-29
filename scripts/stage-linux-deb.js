@@ -21,6 +21,12 @@ function parseArgs(argv) {
   return args;
 }
 
+const SKIP_DIRS = new Set([
+  ".git",
+  "node_modules",
+  "release-assets",
+]);
+
 function walkFiles(root) {
   const results = [];
   if (!fs.existsSync(root)) {
@@ -33,6 +39,9 @@ function walkFiles(root) {
     for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
       const fullPath = path.join(current, entry.name);
       if (entry.isDirectory()) {
+        if (SKIP_DIRS.has(entry.name)) {
+          continue;
+        }
         stack.push(fullPath);
       } else if (entry.isFile()) {
         results.push(fullPath);
@@ -80,15 +89,36 @@ function main() {
 
   const debArch = debArchFor(arch);
   const version = require("../package.json").version;
-  const outDir = path.join(process.cwd(), "out");
-  const debs = walkFiles(outDir).filter((file) => file.endsWith(".deb"));
+  const searchRoots = [
+    path.join(process.cwd(), "out"),
+    path.join(process.cwd(), "src", "out"),
+    process.cwd(),
+  ];
+  const seen = new Set();
+  const debs = [];
+  for (const root of searchRoots) {
+    for (const file of walkFiles(root)) {
+      if (!file.endsWith(".deb")) continue;
+      const real = fs.realpathSync(file);
+      if (seen.has(real)) continue;
+      seen.add(real);
+      debs.push(file);
+    }
+  }
   const matchingDebs = debs.filter((file) => path.basename(file).includes(`_${debArch}.deb`));
   const selected = matchingDebs[0] || debs[0];
 
   if (!selected) {
     console.error("No deb package found.");
-    printOutTree(outDir);
+    for (const root of searchRoots) {
+      printOutTree(root);
+    }
     process.exit(1);
+  }
+
+  console.log("Deb candidates:");
+  for (const deb of debs) {
+    console.log(`  ${deb}`);
   }
 
   fs.mkdirSync("release-assets", { recursive: true });
