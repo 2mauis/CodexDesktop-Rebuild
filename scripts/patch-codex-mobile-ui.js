@@ -241,7 +241,7 @@ function patchAnnouncementGate(source) {
 
   const patch = findAnnouncementGatePatch(source);
   if (!patch) {
-    throw new Error("Codex mobile announcement gate was not recognized");
+    return { source, changed: false, skipped: true };
   }
 
   return {
@@ -272,6 +272,11 @@ function patchSource(source) {
     const patched = patchAnnouncementGate(next);
     next = patched.source;
     changed = changed || patched.changed;
+    if (patched.skipped) {
+      console.warn(
+        "   [!] Codex mobile announcement gate was not recognized; sidebar entry remains exposed",
+      );
+    }
   }
 
   return { source: next, changed };
@@ -370,6 +375,18 @@ function runSelfTest() {
   }
   if (!completedSetup.source.includes(`l=t&&i&&!r&&!n&&!s/* ${ANNOUNCEMENT_MARKER} */`)) {
     throw new Error("completed-setup announcement gate was not relaxed");
+  }
+
+  const missingAnnouncementSample = [
+    "function Yy({enabled:e,hasCompletedCodexMobileSetup:t,remoteControlFeaturesVisible:n,remoteControlOnboardingEnabled:r}){return e&&n&&r&&!t}",
+    "function A_(){let e=\"codex-mobile\";return e}",
+  ].join("");
+  const missingAnnouncement = patchSource(missingAnnouncementSample);
+  if (!missingAnnouncement.changed) {
+    throw new Error("missing-announcement self-test did not patch sidebar");
+  }
+  if (!missingAnnouncement.source.includes(`return e}/* ${MARKER} */`)) {
+    throw new Error("missing-announcement sidebar gate was not relaxed");
   }
 
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "codex-mobile-ui-"));
