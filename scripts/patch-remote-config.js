@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Main-process patch: enable remote features in Codex config by default.
+ * Main-process patch: enable desktop-required features in Codex config by default.
  *
  * At app startup, ensure the user's Codex config contains:
  *
@@ -9,10 +9,10 @@
  *   [features]
  *   remote_connections = true
  *   remote_control = true
+ *   goals = true
  *
- * This mirrors `codex features enable remote_connections` and
- * `codex features enable remote_control`, but makes rebuilt desktop apps work
- * out of the box for remote mobile connections.
+ * This mirrors `codex features enable <feature>`, but makes rebuilt desktop
+ * apps work out of the box for features that the renderer exposes.
  */
 const fs = require("fs");
 const path = require("path");
@@ -22,12 +22,18 @@ const { SRC_DIR, relPath } = require("./patch-util");
 
 const MARKER = "codex-rebuild-remote-config-defaults";
 const CLEANUP_MARKER = "codex-rebuild-remote-control-cleanup-disabled";
+const CLI_OVERRIDE_INJECTION = [
+  "const resources=process.env.CODEX_ELECTRON_RESOURCES_PATH||process.resourcesPath;",
+  "const bundledCli=resources&&path.join(resources,process.platform==='win32'?'codex.exe':'codex');",
+  "if(process.env.CODEX_ALLOW_EXTERNAL_CLI_PATH!=='1'&&bundledCli&&fs.existsSync(bundledCli))process.env.CODEX_CLI_PATH=bundledCli;",
+].join("\n");
 
 const INJECTION =
   [
     `/* ${MARKER} */`,
     ";(()=>{try{",
     'const fs=require("fs"),path=require("path"),os=require("os");',
+    CLI_OVERRIDE_INJECTION,
     'const dir=process.env.CODEX_HOME||path.join(os.homedir(),".codex");',
     'const file=path.join(dir,"config.toml");',
     "function ensureFlag(text,key){",
@@ -56,7 +62,7 @@ const INJECTION =
     "let text='';",
     "try{text=fs.readFileSync(file,'utf8');}catch(e){if(!e||e.code!=='ENOENT')return;}",
     "let next=text;",
-    "for(const key of ['remote_connections','remote_control'])next=ensureFlag(next,key);",
+    "for(const key of ['remote_connections','remote_control','goals'])next=ensureFlag(next,key);",
     "if(next!==text)fs.writeFileSync(file,next,'utf8');",
     "}catch{}})();",
     "",
@@ -88,6 +94,51 @@ function disableRemoteControlCleanup(source) {
   }
 
   return { source: next, changed: true, status: "disabled" };
+}
+
+function refreshInjectedFeatureDefaults(source) {
+  if (!source.includes(MARKER)) {
+    return { source, changed: false, status: "not-present" };
+  }
+
+  let next = source;
+  let changed = false;
+
+  const current = "['remote_connections','remote_control','goals']";
+  if (!next.includes(current)) {
+    const previous = "['remote_connections','remote_control']";
+    if (!next.includes(previous)) {
+      throw new Error("remote config marker found, but injected feature list was not recognized");
+    }
+    next = next.replace(previous, current);
+    changed = true;
+  }
+
+  if (!next.includes("CODEX_ALLOW_EXTERNAL_CLI_PATH")) {
+    const anchor = 'const fs=require("fs"),path=require("path"),os=require("os");';
+    if (!next.includes(anchor)) {
+      throw new Error("remote config marker found, but injection header was not recognized");
+    }
+    next = next.replace(anchor, `${anchor}\n${CLI_OVERRIDE_INJECTION}`);
+    changed = true;
+  }
+
+  if (!changed) {
+    return { source: next, changed: false, status: "current" };
+  }
+
+  if (!next.includes(current)) {
+    throw new Error("remote config marker found, but injected feature list was not recognized");
+  }
+  if (!next.includes("CODEX_ALLOW_EXTERNAL_CLI_PATH")) {
+    throw new Error("remote config marker found, but bundled CLI override was not inserted");
+  }
+
+  return {
+    source: next,
+    changed: true,
+    status: "upgraded",
+  };
 }
 
 function locateTargets(platform) {
@@ -128,6 +179,7 @@ function runSelfTest() {
   if (!text.includes("remote_connections = true"))
     throw new Error("missing remote_connections");
   if (!text.includes("remote_control = true")) throw new Error("missing remote_control");
+  if (!text.includes("goals = true")) throw new Error("missing goals");
 
   fs.writeFileSync(
     configPath,
@@ -140,8 +192,45 @@ function runSelfTest() {
     throw new Error("remote_control was not forced true");
   if (!text.includes("remote_connections = true"))
     throw new Error("remote_connections was not inserted");
+  if (!text.includes("goals = true"))
+    throw new Error("goals was not inserted");
   if (text.indexOf("remote_connections = true") > text.indexOf("[other]"))
     throw new Error("remote_connections inserted outside [features]");
+  if (text.indexOf("goals = true") > text.indexOf("[other]"))
+    throw new Error("goals inserted outside [features]");
+
+  const resourcesDir = fs.mkdtempSync(path.join(os.tmpdir(), "codex-resources-"));
+  const bundledCliPath = path.join(resourcesDir, process.platform === "win32" ? "codex.exe" : "codex");
+  fs.writeFileSync(bundledCliPath, "");
+  const cliPath = execFileSync(
+    process.execPath,
+    ["-e", `${INJECTION};process.stdout.write(process.env.CODEX_CLI_PATH||"")`],
+    {
+      env: {
+        ...process.env,
+        CODEX_HOME: tmp,
+        CODEX_CLI_PATH: "/tmp/old-codex",
+        CODEX_ELECTRON_RESOURCES_PATH: resourcesDir,
+      },
+    },
+  ).toString();
+  if (cliPath !== bundledCliPath)
+    throw new Error("bundled CLI path did not override user-level CODEX_CLI_PATH");
+  const preservedCliPath = execFileSync(
+    process.execPath,
+    ["-e", `${INJECTION};process.stdout.write(process.env.CODEX_CLI_PATH||"")`],
+    {
+      env: {
+        ...process.env,
+        CODEX_HOME: tmp,
+        CODEX_ALLOW_EXTERNAL_CLI_PATH: "1",
+        CODEX_CLI_PATH: "/tmp/old-codex",
+        CODEX_ELECTRON_RESOURCES_PATH: resourcesDir,
+      },
+    },
+  ).toString();
+  if (preservedCliPath !== "/tmp/old-codex")
+    throw new Error("explicit external CLI opt-in was not preserved");
 
   const cleanupSource = [
     "async function vV({codexHome:e,hostConfig:n,logger:r=t.Jr()}){",
@@ -161,6 +250,24 @@ function runSelfTest() {
   if (cleanupAgain.changed || cleanupAgain.status !== "already-disabled")
     throw new Error("remote_control cleanup patch is not idempotent");
 
+  const oldInjection = INJECTION.replace(
+    "['remote_connections','remote_control','goals']",
+    "['remote_connections','remote_control']",
+  );
+  const refreshed = refreshInjectedFeatureDefaults(`${oldInjection}console.log(1);`);
+  if (!refreshed.changed || refreshed.status !== "upgraded")
+    throw new Error("old remote config defaults were not upgraded");
+  if (!refreshed.source.includes("['remote_connections','remote_control','goals']"))
+    throw new Error("goals missing after remote config defaults upgrade");
+  const refreshedAgain = refreshInjectedFeatureDefaults(refreshed.source);
+  if (refreshedAgain.changed || refreshedAgain.status !== "current")
+    throw new Error("remote config defaults upgrade is not idempotent");
+  const veryOldInjection = oldInjection.replace(`${CLI_OVERRIDE_INJECTION}\n`, "");
+  const refreshedVeryOld = refreshInjectedFeatureDefaults(`${veryOldInjection}console.log(1);`);
+  if (!refreshedVeryOld.source.includes("CODEX_ALLOW_EXTERNAL_CLI_PATH"))
+    throw new Error("old remote config defaults were not upgraded with bundled CLI override");
+
+  fs.rmSync(resourcesDir, { recursive: true, force: true });
   fs.rmSync(tmp, { recursive: true, force: true });
   console.log("[ok] remote config injection self-test passed");
 }
@@ -190,7 +297,18 @@ function main() {
     console.log(`\n-- [${target.platform}] ${relPath(target.path)}`);
 
     if (next.includes(MARKER)) {
-      console.log("   [ok] remote config defaults already injected");
+      const refresh = refreshInjectedFeatureDefaults(next);
+      if (refresh.status === "current") {
+        console.log("   [ok] remote config defaults already injected");
+      } else if (refresh.status === "upgraded") {
+        if (isCheck) {
+          console.log("   [?] would upgrade remote config startup defaults");
+        } else {
+          console.log("   [ok] remote config startup defaults upgraded");
+          next = refresh.source;
+        }
+        changed = true;
+      }
     } else if (isCheck) {
       console.log("   [?] would inject remote config defaults");
       changed = true;
