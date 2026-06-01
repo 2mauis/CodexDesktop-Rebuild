@@ -7,7 +7,8 @@ set -euo pipefail
 # `codex` package. Updating only the backend CLI is not enough: new product
 # features such as slash commands live in the Electron app.asar frontend. This
 # script makes legacy launch paths resolve to the current `codex` shell and
-# links frontend resources so direct legacy launches do not keep using stale UI.
+# links frontend/backend resources so direct legacy launches do not keep using
+# stale UI or an older user-installed CLI.
 
 SOURCE_PACKAGE="${SOURCE_PACKAGE:-codex}"
 TARGET_PACKAGES="${TARGET_PACKAGES:-codex-desktop}"
@@ -43,11 +44,18 @@ fi
 
 resolve_cli_path() {
   local home="${1:-}"
-  if [ -n "${CODEX_CLI_PATH:-}" ]; then
-    printf '%s\n' "${CODEX_CLI_PATH}"
-  elif [ -n "${home}" ] && [ -x "${home}/.local/bin/codex" ]; then
-    printf '%s\n' "${home}/.local/bin/codex"
-  elif [ -x "${SOURCE_RESOURCES}/codex" ]; then
+  if [ "${CODEX_SYNC_ALLOW_CLI_OVERRIDE:-0}" = "1" ]; then
+    if [ -n "${CODEX_CLI_PATH:-}" ]; then
+      printf '%s\n' "${CODEX_CLI_PATH}"
+      return 0
+    fi
+    if [ -n "${home}" ] && [ -x "${home}/.local/bin/codex" ]; then
+      printf '%s\n' "${home}/.local/bin/codex"
+      return 0
+    fi
+  fi
+
+  if [ -x "${SOURCE_RESOURCES}/codex" ]; then
     printf '%s\n' "${SOURCE_RESOURCES}/codex"
   else
     printf '%s\n' "${SOURCE_BIN}"
@@ -135,8 +143,9 @@ for target_package in ${TARGET_PACKAGES}; do
       "${target_resources}/${resource}"
   done
 
-  # Keep a usable backend for direct legacy launches, but desktop files still
-  # pass CODEX_CLI_PATH so the user's selected CLI wins.
+  # Keep the backend tied to the freshly installed app resources. Letting a
+  # user-level CLI override win here can silently pin desktop features to an
+  # older backend after deb upgrades.
   replace_with_symlink \
     "${SOURCE_RESOURCES}/codex" \
     "${target_resources}/codex"
