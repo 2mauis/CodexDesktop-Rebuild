@@ -36,6 +36,21 @@ npm run build:all
 npm run dev
 ```
 
+## Installed Desktop Repair
+
+After installing the Linux desktop package, run:
+
+```bash
+sudo scripts/patch-installed-codex-shells.sh
+```
+
+The script syncs legacy `codex-desktop` launch paths to the current `codex`
+package and installs a narrow `/usr/bin/bwrap` AppArmor userns profile when
+Ubuntu's `kernel.apparmor_restrict_unprivileged_userns` setting would otherwise
+block Codex sandbox commands with `bwrap: loopback: Failed RTM_NEWADDR`.
+
+Set `CODEX_INSTALL_BWRAP_APPARMOR_PROFILE=0` to skip the AppArmor profile step.
+
 ## Project Structure
 
 ```

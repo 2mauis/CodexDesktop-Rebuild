@@ -16,6 +16,7 @@ SOURCE_ROOT="${SOURCE_ROOT:-/usr/lib/${SOURCE_PACKAGE}}"
 SOURCE_RESOURCES="${SOURCE_RESOURCES:-${SOURCE_ROOT}/resources}"
 SOURCE_BIN="${SOURCE_BIN:-/usr/bin/${SOURCE_PACKAGE}}"
 BACKUP_SUFFIX="${BACKUP_SUFFIX:-orig-dpkg-shell-sync}"
+BWRAP_APPARMOR_PROFILE="${BWRAP_APPARMOR_PROFILE:-/etc/apparmor.d/bwrap}"
 
 if [ "${CODEX_SYNC_LEGACY_DESKTOP:-1}" = "0" ]; then
   echo "[skip] legacy Codex desktop shell sync disabled"
@@ -74,6 +75,60 @@ backup_once() {
   fi
 }
 
+install_bwrap_apparmor_profile() {
+  if [ "${CODEX_INSTALL_BWRAP_APPARMOR_PROFILE:-1}" = "0" ]; then
+    echo "[skip] bwrap AppArmor profile install disabled"
+    return 0
+  fi
+
+  if [ ! -x /usr/bin/bwrap ]; then
+    echo "[skip] bwrap not found at /usr/bin/bwrap"
+    return 0
+  fi
+
+  if [ ! -d /etc/apparmor.d ]; then
+    echo "[skip] AppArmor profile directory not found"
+    return 0
+  fi
+
+  if ! command -v apparmor_parser >/dev/null 2>&1; then
+    echo "[skip] apparmor_parser not found"
+    return 0
+  fi
+
+  local restrict_userns
+  restrict_userns="$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null || printf '0')"
+  if [ "${restrict_userns}" != "1" ]; then
+    echo "[skip] AppArmor unprivileged userns restriction is not enabled"
+    return 0
+  fi
+
+  if [ -f "${BWRAP_APPARMOR_PROFILE}" ] &&
+    ! grep -q 'profile bwrap /usr/bin/bwrap flags=(unconfined)' "${BWRAP_APPARMOR_PROFILE}"; then
+    backup_once "${BWRAP_APPARMOR_PROFILE}"
+  fi
+
+  cat >"${BWRAP_APPARMOR_PROFILE}" <<'EOF'
+# This profile allows bubblewrap to create unprivileged user namespaces on
+# Ubuntu systems that enable kernel.apparmor_restrict_unprivileged_userns.
+# It mirrors the narrow flags=(unconfined) userns profiles shipped for
+# rootless namespace tools such as buildah and rootlesskit.
+
+abi <abi/4.0>,
+include <tunables/global>
+
+profile bwrap /usr/bin/bwrap flags=(unconfined) {
+  userns,
+
+  # Site-specific additions and overrides. See local/README for details.
+  include if exists <local/bwrap>
+}
+EOF
+
+  apparmor_parser -r -K "${BWRAP_APPARMOR_PROFILE}"
+  echo "[ok] bwrap: installed AppArmor userns profile"
+}
+
 replace_with_symlink() {
   local source="$1"
   local target="$2"
@@ -119,6 +174,8 @@ patch_user_desktop_file() {
     chown "${user_name}:${group_name}" "${desktop_file}" 2>/dev/null || true
   fi
 }
+
+install_bwrap_apparmor_profile
 
 for target_package in ${TARGET_PACKAGES}; do
   target_root="/usr/lib/${target_package}"
