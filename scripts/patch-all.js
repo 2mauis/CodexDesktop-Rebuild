@@ -20,6 +20,7 @@ const PATCHES = [
   "patch-plugin-auth.js",
   "patch-remote-config.js",
   "patch-codex-mobile-ui.js",
+  "patch-linux-opaque-renderer.js",
   "patch-updater.js",
   "patch-archive-delete.js",
 ];
