@@ -22,6 +22,10 @@ const LEGACY_OPAQUE_APPEARANCES =
 const LEGACY_VY_APPEARANCES =
   "t===`primary`||t===`secondary`||t===`hud`||t===`hotkeyWindowHome`||t===`hotkeyWindowThread`";
 
+function opaqueAppearancesFor(name) {
+  return `${name}===\`primary\`||${name}===\`secondary\`||${name}===\`hud\`||${name}===\`hotkeyWindowHome\`||${name}===\`hotkeyWindowThread\``;
+}
+
 const CSS_PATCH = [
   `/* ${CSS_V2_MARKER} */`,
   "[data-codex-window-type=electron][data-codex-os=linux]:not([data-codex-window-chrome=application-menu]){background-color:var(--color-background-surface-under);background-image:none}",
@@ -63,6 +67,30 @@ function patchCurrentMainSource(source) {
   };
 }
 
+function patchModernMainSource(source) {
+  if (source.includes(MAIN_MARKER)) {
+    return { changed: false, source, reason: "already-patched-modern" };
+  }
+
+  const re =
+    /shouldAlwaysUseOpaqueWindowSurface\(([A-Za-z_$][\w$]*)\)\{return ([A-Za-z_$][\w$]*)\(\{appearance:\1,opaqueWindowsEnabled:this\.isOpaqueWindowsEnabled\(\),platform:process\.platform\}\)\|\|!([A-Za-z_$][\w$]*)\(\)&&!([A-Za-z_$][\w$]*)\(\1\)\}/;
+  const match = re.exec(source);
+  if (!match) {
+    return { changed: false, source, reason: "not-modern-main" };
+  }
+
+  const [oldSource, appearance, alwaysOpaqueFn, devModeFn, transparentAppearanceFn] = match;
+  const replacement =
+    `shouldAlwaysUseOpaqueWindowSurface(${appearance}){return process.platform===\`linux\`&&(${opaqueAppearancesFor(appearance)})/* ${MAIN_MARKER} */||` +
+    `${alwaysOpaqueFn}({appearance:${appearance},opaqueWindowsEnabled:this.isOpaqueWindowsEnabled(),platform:process.platform})||!${devModeFn}()&&!${transparentAppearanceFn}(${appearance})}`;
+
+  return {
+    changed: true,
+    source: source.replace(oldSource, replacement),
+    reason: "patched-modern-main",
+  };
+}
+
 function patchLegacyMainSource(source) {
   if (source.includes(LEGACY_MAIN_MARKER)) {
     return { changed: false, source, reason: "already-patched-legacy" };
@@ -92,6 +120,8 @@ function patchLegacyMainSource(source) {
 function patchMainSource(source) {
   const current = patchCurrentMainSource(source);
   if (current.changed || current.reason === "already-patched-current") return current;
+  const modern = patchModernMainSource(source);
+  if (modern.changed || modern.reason === "already-patched-modern") return modern;
   return patchLegacyMainSource(source);
 }
 
@@ -171,6 +201,19 @@ function runSelfTest() {
   }
   if (patchMainSource(currentPatched.source).changed) {
     throw new Error("current main-process patch is not idempotent");
+  }
+
+  const modernMain =
+    "shouldAlwaysUseOpaqueWindowSurface(e){return m5({appearance:e,opaqueWindowsEnabled:this.isOpaqueWindowsEnabled(),platform:process.platform})||!uP()&&!f5(e)}";
+  const modernPatched = patchMainSource(modernMain);
+  if (!modernPatched.changed || !modernPatched.source.includes(MAIN_MARKER)) {
+    throw new Error("modern main-process sample was not patched");
+  }
+  if (!modernPatched.source.includes("process.platform===`linux`&&(e===`primary`")) {
+    throw new Error("modern Linux opaque condition missing");
+  }
+  if (patchMainSource(modernPatched.source).changed) {
+    throw new Error("modern main-process patch is not idempotent");
   }
 
   const legacyMain =

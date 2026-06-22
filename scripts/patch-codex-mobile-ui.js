@@ -16,8 +16,20 @@ const { locateBundles, relPath, SRC_DIR } = require("./patch-util");
 const MARKER = "codex-rebuild-codex-mobile-ui-entry";
 const ANNOUNCEMENT_MARKER = "codex-rebuild-codex-mobile-announcement-enabled";
 
-const SIDEBAR_GATE_RE =
-  /function\s+([A-Za-z_$][\w$]*)\(\{enabled:e,hasCompletedCodexMobileSetup:t,remoteControlFeaturesVisible:n,remoteControlOnboardingEnabled:r\}\)\{return e&&n&&r&&!t\}/;
+const SIDEBAR_GATE_PATCHES = [
+  {
+    re: /function\s+([A-Za-z_$][\w$]*)\(\{enabled:e,hasCompletedCodexMobileSetup:t,remoteControlFeaturesVisible:n,remoteControlOnboardingEnabled:r\}\)\{return e&&n&&r&&!t\}/,
+    replacement(fnName) {
+      return `function ${fnName}({enabled:e,hasCompletedCodexMobileSetup:t,remoteControlFeaturesVisible:n,remoteControlOnboardingEnabled:r}){return e}/* ${MARKER} */`;
+    },
+  },
+  {
+    re: /function\s+([A-Za-z_$][\w$]*)\(\{enabled:e,hasCompletedCodexMobileSetup:t,isChatGptAuth:n,remoteControlFeaturesVisible:r,remoteControlOnboardingEnabled:i\}\)\{return e&&n&&r&&i&&!t\}/,
+    replacement(fnName) {
+      return `function ${fnName}({enabled:e,hasCompletedCodexMobileSetup:t,isChatGptAuth:n,remoteControlFeaturesVisible:r,remoteControlOnboardingEnabled:i}){return e}/* ${MARKER} */`;
+    },
+  },
+];
 
 const ANNOUNCEMENT_GATE = "u=t&&i&&a&&!l&&!r&&!n&&!s";
 const ANNOUNCEMENT_REPLACEMENT =
@@ -258,14 +270,19 @@ function patchSource(source) {
   let changed = false;
 
   if (!next.includes(MARKER)) {
-    next = next.replace(SIDEBAR_GATE_RE, (match, fnName) => {
-      changed = true;
-      return `function ${fnName}({enabled:e,hasCompletedCodexMobileSetup:t,remoteControlFeaturesVisible:n,remoteControlOnboardingEnabled:r}){return e}/* ${MARKER} */`;
-    });
+    for (const patch of SIDEBAR_GATE_PATCHES) {
+      next = next.replace(patch.re, (match, fnName) => {
+        changed = true;
+        return patch.replacement(fnName);
+      });
+      if (changed) break;
+    }
   }
 
   if (!source.includes(MARKER) && !changed) {
-    throw new Error("Codex mobile sidebar gate was not recognized");
+    console.warn(
+      "   [!] Codex mobile sidebar gate was not recognized; upstream may have moved or removed it",
+    );
   }
 
   if (!next.includes(ANNOUNCEMENT_MARKER)) {
@@ -353,6 +370,18 @@ function runSelfTest() {
   if (!reordered.changed) throw new Error("reordered self-test did not patch");
   if (!reordered.source.includes(`u=t&&i&&!n&&!s/* ${ANNOUNCEMENT_MARKER} */`)) {
     throw new Error("reordered announcement gate was not relaxed");
+  }
+
+  const chatGptAuthSample = [
+    "function iD({enabled:e,hasCompletedCodexMobileSetup:t,isChatGptAuth:n,remoteControlFeaturesVisible:r,remoteControlOnboardingEnabled:i}){return e&&n&&r&&i&&!t}",
+    "function PD(){let e=\"codex-mobile\";return e}",
+  ].join("");
+  const chatGptAuth = patchSource(chatGptAuthSample);
+  if (!chatGptAuth.changed) {
+    throw new Error("chatgpt-auth sidebar self-test did not patch");
+  }
+  if (!chatGptAuth.source.includes(`return e}/* ${MARKER} */`)) {
+    throw new Error("chatgpt-auth sidebar gate was not relaxed");
   }
 
   const noStatsigSample = [
