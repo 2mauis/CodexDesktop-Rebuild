@@ -62,7 +62,7 @@
     "zod": "^4.1.13"
   },
   "codexBuildFlavor": "prod",
-  "codexBuildNumber": "1272",
-  "codexSparkleFeedUrl": "https://persistent.oaistatic.com/codex-app-prod/appcast.xml",
-  "codexSparklePublicKey": "rhcBvttuqDFriyNqwTQJR3L4UT1WjIK4QxtwtwusVic="
+  "codexBuildNumber": "4028",
+  "codexSparkleFeedUrl": "https://persistent.oaistatic.com/codex-app-prod/appcast-x64.xml",
+  "codexSparklePublicKey": "mNfr1v9t63BfgDtlw4C8lRvSY6uMggIXABDOCi3tS6k="
 }
