@@ -19,6 +19,7 @@ const PATCHES = [
   "patch-fast-mode.js",
   "patch-plugin-auth.js",
   "patch-remote-config.js",
+  "patch-owl-features-binding.js",
   "patch-codex-mobile-ui.js",
   "patch-linux-opaque-renderer.js",
   "patch-updater.js",
