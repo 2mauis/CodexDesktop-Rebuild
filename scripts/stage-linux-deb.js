@@ -122,7 +122,7 @@ function main() {
   }
 
   fs.mkdirSync("release-assets", { recursive: true });
-  const destination = path.join("release-assets", `codex_${version}_ubuntu${ubuntu}_${debArch}.deb`);
+  const destination = path.join("release-assets", `codex-app_${version}_ubuntu${ubuntu}_${debArch}.deb`);
   fs.copyFileSync(selected, destination);
   console.log(`Staged ${selected} -> ${destination}`);
 }

@@ -36,18 +36,21 @@ npm run build:all
 npm run dev
 ```
 
-## Installed Desktop Repair
+## Linux Package Names
 
-After installing the Linux desktop package, run:
+Linux `.deb` builds install the desktop app as `codex-app`, not `codex`.
+The official OpenAI Codex CLI installer owns the `codex` command, so the app
+package keeps these entry points separate:
 
-```bash
-sudo scripts/patch-installed-codex-shells.sh
-```
+- `/usr/bin/codex-app` launches the Electron desktop app.
+- `/usr/lib/codex-app/resources/codex` remains the bundled backend used by the
+  desktop app.
+- `codex` remains available for the official standalone CLI.
 
-The script syncs legacy `codex-desktop` launch paths to the current `codex`
-package and installs a narrow `/usr/bin/bwrap` AppArmor userns profile when
-Ubuntu's `kernel.apparmor_restrict_unprivileged_userns` setting would otherwise
-block Codex sandbox commands with `bwrap: loopback: Failed RTM_NEWADDR`.
+The package post-install script also installs a narrow `/usr/bin/bwrap` AppArmor
+userns profile when Ubuntu's `kernel.apparmor_restrict_unprivileged_userns`
+setting would otherwise block Codex sandbox commands with
+`bwrap: loopback: Failed RTM_NEWADDR`.
 
 Set `CODEX_INSTALL_BWRAP_APPARMOR_PROFILE=0` to skip the AppArmor profile step.
 

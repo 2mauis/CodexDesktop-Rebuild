@@ -202,8 +202,8 @@ jobs:
 
           | Package | Build target |
           |---------|--------------|
-          | `codex_*_ubuntu24.04_amd64.deb` | Ubuntu 24.04 x64 |
-          | `codex_*_ubuntu24.04_arm64.deb` | Ubuntu 24.04 arm64 |
+          | `codex-app_*_ubuntu24.04_amd64.deb` | Ubuntu 24.04 x64 |
+          | `codex-app_*_ubuntu24.04_arm64.deb` | Ubuntu 24.04 arm64 |
 
           ## Upstream Versions
 

@@ -72,16 +72,16 @@ module.exports = {
       name: "@electron-forge/maker-deb",
       config: {
         options: {
-          name: "codex",
-          productName: "Codex",
+          name: "codex-app",
+          productName: "Codex App",
           genericName: "AI Coding Assistant",
-          categories: ["Development", "Utility"],
+          categories: ["Development"],
           bin: "Codex",
           maintainer: "Cometix Space",
-          homepage: "https://github.com/Haleclipse/CodexDesktop-Rebuild",
+          homepage: "https://github.com/2mauis/CodexDesktop-Rebuild",
           icon: "./resources/electron.png",
           scripts: {
-            postinst: path.join(__dirname, "scripts", "patch-installed-codex-shells.sh"),
+            postinst: path.join(__dirname, "scripts", "postinstall-codex-app.sh"),
           },
         },
       },
